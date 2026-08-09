@@ -36,38 +36,41 @@ export interface ColorNoteSettings {
 }
 
 /**
- * The four states this vault already uses, with the exact colours from its
- * `stan-tagi.css` snippet — so enabling the plugin changes no colour that is
- * already on screen.
+ * A starting palette, not a fixed one: four states that cover the usual life of
+ * a note, meant to be renamed, recoloured or deleted.
+ *
+ * Each carries the colours of the theme it is meant for. They are picked to stay
+ * readable on both a dark and a light background, which matters more here than
+ * being vivid — a title is small text, not a badge.
  */
 export const DEFAULT_STATES: ColorState[] = [
 	{
-		value: 'otwarte',
-		label: 'Otwarte',
+		value: 'open',
+		label: 'Open',
 		color: '#ff7b7b',
 		colorLight: '#c0392b',
-		description: 'Do zrobienia.',
+		description: 'Still to do.',
 	},
 	{
-		value: 'zrobione',
-		label: 'Zrobione',
+		value: 'done',
+		label: 'Done',
 		color: '#4c9a63',
 		colorLight: '#1e6b34',
-		description: 'Domknięte i nadal aktualne.',
+		description: 'Finished and still current.',
 	},
 	{
-		value: 'zrobione-bez-testu-u',
-		label: 'Zrobione, bez testu',
+		value: 'needs-testing',
+		label: 'Needs testing',
 		color: '#e69a3c',
 		colorLight: '#b35c00',
-		description: 'Gotowe w całości, brakuje testu wykonanego przez użytkownika.',
+		description: 'Complete, but nobody has tried it yet.',
 	},
 	{
-		value: 'archiwum',
-		label: 'Archiwum',
+		value: 'archived',
+		label: 'Archived',
 		color: '#8a9459',
 		colorLight: '#6b7340',
-		description: 'Nie ma tam już nic do wzięcia.',
+		description: 'Nothing left to take from it — no need to open it.',
 	},
 ];
 
