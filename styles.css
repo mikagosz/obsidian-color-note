@@ -1,0 +1,38 @@
+/* The plugin sets two custom properties on a file explorer row — one colour per
+   theme — and these two rules pick whichever applies. Keeping the rules here
+   rather than in a generated stylesheet is what Obsidian's guidelines require:
+   plugins must not create style elements. */
+
+.theme-dark .nav-file-title[data-color-note] .nav-file-title-content,
+.theme-dark .nav-folder-title[data-color-note] .nav-folder-title-content {
+	color: var(--color-note-dark) !important;
+}
+
+.theme-light .nav-file-title[data-color-note] .nav-file-title-content,
+.theme-light .nav-folder-title[data-color-note] .nav-folder-title-content {
+	color: var(--color-note-light) !important;
+}
+
+/* The swatch next to a state's name — in the picker and in the settings.
+   A state is a colour first and a word second, so the word never appears
+   without the colour beside it. */
+.color-note-swatch {
+	display: inline-block;
+	width: 0.85em;
+	height: 0.85em;
+	margin-right: 0.5em;
+	border-radius: 50%;
+	border: 1px solid var(--background-modifier-border);
+	vertical-align: baseline;
+}
+
+.color-note-modal .setting-item {
+	padding: 0.5em 0;
+}
+
+/* The state already in force, so the dialog answers "what is it now?"
+   before it asks "what should it be?" */
+.color-note-modal .color-note-current {
+	background: var(--background-modifier-hover);
+	border-radius: var(--radius-s);
+}
