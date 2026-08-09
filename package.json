@@ -1,6 +1,6 @@
 {
 	"name": "obsidian-color-note",
-	"version": "0.1.0",
+	"version": "0.1.1",
 	"description": "Colour note and folder titles in the Obsidian file explorer from the right-click menu, using states you define yourself.",
 	"main": "main.js",
 	"type": "module",
