@@ -4,14 +4,31 @@ Colour note and folder titles in the Obsidian file explorer, from the right-clic
 menu. The colours mean whatever you decide they mean — you define the states
 yourself, in the settings, without touching CSS.
 
+## A colour that means something
+
+Most colouring plugins give you a palette. This one asks you what the colour is
+**for**.
+
+A state is three things: a colour, a value written into the note, and a sentence
+saying what it stands for. That sentence is the point. Six weeks from now you will
+open the vault, see an orange title, and know that orange means "finished but
+nobody has tested it" — because the plugin still holds the sentence you wrote when
+you invented that state.
+
+A palette alone cannot do that. Colour without meaning decays into decoration: you
+remember what red meant for about a week, and after that the explorer is just
+festive.
+
+Because the state is written into the note's front matter, it also outlives the
+plugin. Other tools can read it, Dataview can query it, and a snippet can style it.
+Uninstall Color Note and your notes still say what they are.
+
 ## Why
 
 A file explorer full of grey titles tells you nothing about what is finished and
 what still needs work. Snippets can colour titles, but every change means editing
-CSS or front matter by hand, so in practice it stops happening.
-
-Color Note makes it two clicks, and keeps the meaning where you can read it: each
-state carries a sentence saying what it stands for.
+CSS or front matter by hand, so in practice it stops happening — and a system you
+have to maintain by hand is a system that quietly stops being true.
 
 ## What it does
 
