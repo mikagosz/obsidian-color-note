@@ -1,0 +1,10 @@
+{
+	"id": "color-note",
+	"name": "Color Note",
+	"version": "0.1.0",
+	"minAppVersion": "1.12.7",
+	"description": "Colour note and folder titles in the file explorer from the right-click menu, using states you define yourself.",
+	"author": "mikagosz",
+	"authorUrl": "https://github.com/mikagosz",
+	"isDesktopOnly": false
+}
