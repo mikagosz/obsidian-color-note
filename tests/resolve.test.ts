@@ -52,7 +52,7 @@ describe('resolveColors', () => {
 		const colors = resolveColors({
 			statusByPath: new Map(),
 			settings: settings({
-				pathColors: { 'Programs': { color: '#abc', colorLight: '#123' } },
+				pathColors: { Programs: { color: '#abc', colorLight: '#123' } },
 			}),
 		});
 		expect(colors.get('Programs')).toEqual({ dark: '#abc', light: '#123' });

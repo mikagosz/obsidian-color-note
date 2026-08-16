@@ -79,3 +79,14 @@ export const DEFAULT_SETTINGS: ColorNoteSettings = {
 	pathColors: {},
 	statusField: 'status',
 };
+
+/**
+ * Stored settings on top of the defaults, with the defaults **cloned**.
+ *
+ * A plain spread would hand out the module's own `DEFAULT_STATES` array, which
+ * the settings tab then edits in place — so deleting a state on a fresh install
+ * would quietly rewrite the defaults for the rest of the session.
+ */
+export function withDefaults(stored: Partial<ColorNoteSettings> | null): ColorNoteSettings {
+	return { ...structuredClone(DEFAULT_SETTINGS), ...(stored ?? {}) };
+}

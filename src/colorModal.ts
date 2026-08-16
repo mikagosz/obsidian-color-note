@@ -1,5 +1,6 @@
 import { type App, Modal, Setting } from 'obsidian';
 import type { ColorState } from './model';
+import { paintSwatch } from './swatch';
 
 export type ColorChoice =
 	| { kind: 'state'; state: ColorState }
@@ -49,7 +50,7 @@ export class ColorModal extends Modal {
 			// The swatch is the point of the dialog: the name of a state means
 			// nothing until you see which colour it puts in the tree.
 			const swatch = row.nameEl.createSpan({ cls: 'color-note-swatch' });
-			swatch.style.backgroundColor = state.color;
+			paintSwatch(swatch, state.color);
 			row.nameEl.prepend(swatch);
 
 			if (state.value === this.current) {

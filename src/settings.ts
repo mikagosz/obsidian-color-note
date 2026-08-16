@@ -1,6 +1,7 @@
-import { type App, Modal, PluginSettingTab, Setting } from 'obsidian';
+import { type App, debounce, Modal, PluginSettingTab, Setting } from 'obsidian';
 import type ColorNotePlugin from './main';
 import type { ColorState } from './model';
+import { paintSwatch } from './swatch';
 
 /**
  * The settings tab exists so states can be invented without touching code: a
@@ -19,15 +20,23 @@ export class ColorNoteSettingTab extends PluginSettingTab {
 		const { containerEl } = this;
 		containerEl.empty();
 
+		// Saving on every keystroke also repainted the whole vault on every
+		// keystroke, and wrote half-typed field names to disk on the way.
+		const saveField = debounce(
+			(value: string) => {
+				this.plugin.settings.statusField = value.trim() || 'status';
+				void this.plugin.saveSettings();
+			},
+			500,
+			true,
+		);
+
 		new Setting(containerEl)
 			.setName('Front matter field')
-			.setDesc('The field a state is written to. Change this only if your vault uses another name.')
-			.addText((text) =>
-				text.setValue(this.plugin.settings.statusField).onChange(async (value) => {
-					this.plugin.settings.statusField = value.trim() || 'status';
-					await this.plugin.saveSettings();
-				}),
-			);
+			.setDesc(
+				'The field a state is written to. Change this only if your vault uses another name — notes already carrying a state keep it under the old field, so the two can drift apart.',
+			)
+			.addText((text) => text.setValue(this.plugin.settings.statusField).onChange(saveField));
 
 		new Setting(containerEl).setName('States').setHeading();
 
@@ -48,7 +57,7 @@ export class ColorNoteSettingTab extends PluginSettingTab {
 				.setDesc(`${state.value} — ${state.description}`);
 
 			const swatch = row.nameEl.createSpan({ cls: 'color-note-swatch' });
-			swatch.style.backgroundColor = state.color;
+			paintSwatch(swatch, state.color);
 			row.nameEl.prepend(swatch);
 
 			row.addExtraButton((button) =>

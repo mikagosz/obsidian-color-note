@@ -19,18 +19,36 @@ export class ExplorerPainter {
 	private colors = new Map<string, ResolvedColor>();
 	private observer: MutationObserver | null = null;
 	private frame: number | null = null;
+	private watched: HTMLElement | null = null;
 
-	/** Starts watching the explorer and paints what is already on screen. */
-	start(): void {
+	/**
+	 * Watch the file explorer and paint what is already on screen.
+	 *
+	 * Deliberately not `document.body`: that woke the painter on every DOM change
+	 * anywhere in Obsidian — every keystroke in the editor included — to repaint
+	 * rows that had not moved. The explorer can be closed and reopened, which
+	 * replaces the container, so this is called again on layout changes and is a
+	 * no-op when the element has not actually changed.
+	 */
+	watch(container: HTMLElement | null): void {
+		if (container === this.watched) return;
+
+		this.observer?.disconnect();
+		this.observer = null;
+		this.watched = container;
+		if (!container) return;
+
 		this.observer = new MutationObserver(() => this.schedule());
-		this.observer.observe(document.body, { childList: true, subtree: true });
+		this.observer.observe(container, { childList: true, subtree: true });
 		this.paint();
 	}
 
 	stop(): void {
 		this.observer?.disconnect();
 		this.observer = null;
+		this.watched = null;
 		if (this.frame !== null) window.cancelAnimationFrame(this.frame);
+		this.frame = null;
 		this.clearAll();
 	}
 
@@ -52,7 +70,10 @@ export class ExplorerPainter {
 	}
 
 	private paint(): void {
-		const titles = document.querySelectorAll<HTMLElement>(
+		// Scoped to the explorer for the same reason the observer is: there are no
+		// rows to paint anywhere else, so scanning the whole document is wasted work.
+		const root: ParentNode = this.watched ?? document;
+		const titles = root.querySelectorAll<HTMLElement>(
 			'.nav-file-title[data-path], .nav-folder-title[data-path]',
 		);
 

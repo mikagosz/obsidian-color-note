@@ -1,7 +1,13 @@
 /* The plugin sets two custom properties on a file explorer row — one colour per
    theme — and these two rules pick whichever applies. Keeping the rules here
    rather than in a generated stylesheet is what Obsidian's guidelines require:
-   plugins must not create style elements. */
+   plugins must not create style elements.
+
+   `!important` is deliberate and has to stay. The title colour is also claimed by
+   the theme and by other plugins that decorate the explorer (Supercharged Links,
+   for one), several of them with heavier selectors. Without it the colour applies
+   in a plain vault and silently loses in the vaults this was written for — which
+   is the worst of both worlds, because nothing reports the loss. */
 
 .theme-dark .nav-file-title[data-color-note] .nav-file-title-content,
 .theme-dark .nav-folder-title[data-color-note] .nav-folder-title-content {
@@ -16,6 +22,14 @@
 /* The swatch next to a state's name — in the picker and in the settings.
    A state is a colour first and a word second, so the word never appears
    without the colour beside it. */
+/* A colour the explorer would refuse: shown as an empty outline, so a typo reads
+   as "wrong", not as "this state has no colour". */
+.color-note-swatch.is-invalid {
+	background: none;
+	border-style: dashed;
+	border-color: var(--text-error);
+}
+
 .color-note-swatch {
 	display: inline-block;
 	width: 0.85em;
