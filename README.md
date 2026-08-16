@@ -43,17 +43,24 @@ have to maintain by hand is a system that quietly stops being true.
 - **Front matter is the source of truth.** A state set by hand, by a template or
   by anything else colours the title just the same.
 
-Four states ship as defaults — open, done, done-without-test and archived — with
+Four states ship as defaults — open, done, needs-testing and archived — with
 colours that read on both themes. Rename them, recolour them or delete them; none
 of them are special to the plugin.
 
 ## Installing
 
-Not in the community catalogue yet. To try it now:
+**Settings → Community plugins → Browse**, search for *Color Note*, install and
+enable it. Updates then arrive on their own.
+
+<details>
+<summary>Installing by hand, for a pre-release build</summary>
 
 1. Download `main.js`, `manifest.json` and `styles.css` from the latest release.
 2. Put them in `<your vault>/.obsidian/plugins/color-note/`.
 3. Enable **Color Note** in Settings → Community plugins.
+
+A copy installed this way does not update itself.
+</details>
 
 ## How it works
 

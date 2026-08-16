@@ -1,14 +1,19 @@
 import { Plugin, type TAbstractFile, TFile, TFolder } from 'obsidian';
 import { type ColorChoice, ColorModal } from './colorModal';
-import { type ColorNoteSettings, DEFAULT_SETTINGS } from './model';
+import { type ColorNoteSettings, withDefaults } from './model';
 import { ExplorerPainter } from './painter';
+import { keysUnder, remapPaths } from './paths';
 import { resolveColors } from './resolve';
 import { ColorNoteSettingTab } from './settings';
 
 export default class ColorNotePlugin extends Plugin {
-	settings: ColorNoteSettings = DEFAULT_SETTINGS;
+	// Cloned, not the module constant: nothing may edit the defaults in place, not
+	// even in the moment before `onload` replaces this.
+	settings: ColorNoteSettings = withDefaults(null);
 
 	private readonly painter = new ExplorerPainter();
+	/** Path → state, kept up to date one note at a time. See `noteChanged`. */
+	private readonly statusByPath = new Map<string, string>();
 	private repaintTimer: number | null = null;
 
 	async onload(): Promise<void> {
@@ -30,18 +35,29 @@ export default class ColorNotePlugin extends Plugin {
 
 		// Front matter edited by hand (or by an agent) has to reach the tree too —
 		// the plugin is one way of setting a state, not the only one.
-		this.registerEvent(this.app.metadataCache.on('changed', () => this.scheduleRepaint()));
+		this.registerEvent(this.app.metadataCache.on('changed', (file) => this.noteChanged(file)));
 		this.registerEvent(
 			this.app.vault.on('rename', (file, oldPath) => this.onRename(file, oldPath)),
 		);
 		this.registerEvent(this.app.vault.on('delete', (file) => this.onDelete(file)));
 
+		// The explorer can be closed and reopened, which replaces the element the
+		// painter watches. Re-pointing it is a no-op when nothing moved.
+		this.registerEvent(
+			this.app.workspace.on('layout-change', () => this.painter.watch(this.explorerEl())),
+		);
+
 		// The first paint waits for the cache: on a cold start the front matter
 		// of most notes is not parsed yet, and painting now would paint nothing.
 		this.app.workspace.onLayoutReady(() => {
-			this.painter.start();
+			this.painter.watch(this.explorerEl());
 			this.repaint();
 		});
+	}
+
+	/** The file explorer's own container, or `null` when the pane is closed. */
+	private explorerEl(): HTMLElement | null {
+		return this.app.workspace.getLeavesOfType('file-explorer')[0]?.view.containerEl ?? null;
 	}
 
 	onunload(): void {
@@ -51,7 +67,7 @@ export default class ColorNotePlugin extends Plugin {
 
 	async loadSettings(): Promise<void> {
 		const stored = (await this.loadData()) as Partial<ColorNoteSettings> | null;
-		this.settings = { ...DEFAULT_SETTINGS, ...(stored ?? {}) };
+		this.settings = withDefaults(stored);
 	}
 
 	async saveSettings(): Promise<void> {
@@ -59,15 +75,38 @@ export default class ColorNotePlugin extends Plugin {
 		this.repaint();
 	}
 
-	/** Re-reads the vault's states and hands the resulting colours to the painter. */
+	/**
+	 * Full sweep of the vault, then paint. Only two things need it: the cold start,
+	 * and a settings change — which can alter the front matter field itself, so
+	 * every note has to be looked at again. Ordinary edits go through `noteChanged`.
+	 */
 	repaint(): void {
-		const statusByPath = new Map<string, string>();
+		this.statusByPath.clear();
 		for (const file of this.app.vault.getMarkdownFiles()) {
 			const value = this.statusOf(file);
-			if (value !== null) statusByPath.set(file.path, value);
+			if (value !== null) this.statusByPath.set(file.path, value);
 		}
 
-		this.painter.setColors(resolveColors({ statusByPath, settings: this.settings }));
+		this.applyColors();
+	}
+
+	/** Hands the current index to the painter. Cheap: no vault access at all. */
+	private applyColors(): void {
+		this.painter.setColors(
+			resolveColors({ statusByPath: this.statusByPath, settings: this.settings }),
+		);
+	}
+
+	/**
+	 * One note changed, so exactly one entry changes. Walking the whole vault here
+	 * cost the same on a note nobody touched as on the one that was edited, and it
+	 * ran on every burst of typing.
+	 */
+	private noteChanged(file: TFile): void {
+		const value = this.statusOf(file);
+		if (value === null) this.statusByPath.delete(file.path);
+		else this.statusByPath.set(file.path, value);
+		this.scheduleRepaint();
 	}
 
 	/** The note's state, or `null` when it has none. */
@@ -79,14 +118,15 @@ export default class ColorNotePlugin extends Plugin {
 	}
 
 	/**
-	 * Editing a note fires `changed` for every keystroke burst; rebuilding the
-	 * whole sheet each time would walk every file in the vault for nothing.
+	 * Editing a note fires `changed` for every keystroke burst, so the paint is
+	 * collapsed into one pass per burst. The index itself is already up to date by
+	 * then — only handing it to the painter waits.
 	 */
 	private scheduleRepaint(): void {
 		if (this.repaintTimer !== null) window.clearTimeout(this.repaintTimer);
 		this.repaintTimer = window.setTimeout(() => {
 			this.repaintTimer = null;
-			this.repaint();
+			this.applyColors();
 		}, 300);
 	}
 
@@ -141,12 +181,34 @@ export default class ColorNotePlugin extends Plugin {
 		});
 	}
 
-	/** A path is the key here, so a rename has to carry the colour with it. */
+	/**
+	 * A path is the key here, so a rename has to carry the colour with it —
+	 * **including everything inside a renamed folder.** Only the folder arrives in
+	 * this event, while every path under it changes at the same moment; moving just
+	 * the one key left the notes inside colourless and their entries stranded in
+	 * `data.json` for good. The prefix rule itself lives in `paths.ts`, tested.
+	 */
 	private onRename(file: TAbstractFile, oldPath: string): void {
-		const color = this.settings.pathColors[oldPath];
-		if (color) {
-			delete this.settings.pathColors[oldPath];
-			this.settings.pathColors[file.path] = color;
+		let moved = false;
+		for (const { from, to } of remapPaths(
+			Object.keys(this.settings.pathColors),
+			oldPath,
+			file.path,
+		)) {
+			const color = this.settings.pathColors[from];
+			if (!color) continue;
+			delete this.settings.pathColors[from];
+			this.settings.pathColors[to] = color;
+			moved = true;
+		}
+
+		for (const { from, to } of remapPaths([...this.statusByPath.keys()], oldPath, file.path)) {
+			const value = this.statusByPath.get(from);
+			this.statusByPath.delete(from);
+			if (value !== undefined) this.statusByPath.set(to, value);
+		}
+
+		if (moved) {
 			void this.saveSettings();
 			return;
 		}
@@ -155,8 +217,17 @@ export default class ColorNotePlugin extends Plugin {
 
 	/** Without this, deleted notes would leave their colours in `data.json` forever. */
 	private onDelete(file: TAbstractFile): void {
-		if (this.settings.pathColors[file.path]) {
-			delete this.settings.pathColors[file.path];
+		let dropped = false;
+		for (const key of keysUnder(Object.keys(this.settings.pathColors), file.path)) {
+			delete this.settings.pathColors[key];
+			dropped = true;
+		}
+
+		for (const key of keysUnder([...this.statusByPath.keys()], file.path)) {
+			this.statusByPath.delete(key);
+		}
+
+		if (dropped) {
 			void this.saveSettings();
 			return;
 		}
