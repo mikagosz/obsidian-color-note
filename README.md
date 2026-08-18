@@ -34,10 +34,17 @@ have to maintain by hand is a system that quietly stops being true.
 
 - **Right-click a note → Color note.** Pick a state and it is written to the
   note's front matter as `status: <value>`.
-- **Right-click a folder → Color folder.** Folders have no front matter, so they
-  take a colour of their own.
-- **Custom colour.** For anything that does not fit a state, pick a colour
-  directly. It applies to that one item and wins over its state.
+- **Right-click a folder → Color folder.** The same states are offered. A folder
+  has no front matter to hold one, so it keeps the state's colour instead — which
+  is what the tree shows either way.
+- **A palette of squares.** Sixteen fixed colours, one click each, every one
+  carrying a shade for the dark theme and one for the light. A slider cannot be
+  hit twice: "that green again" means knowing its hex, and one digit off is a
+  second, almost-identical green in the tree. Under the palette sits every colour
+  the vault is already using, for exactly the same reason.
+- **Custom colour.** For anything the palette does not cover, pick a colour
+  directly — with an eyedropper for taking one off the screen. It applies to that
+  one item and wins over its state.
 - **Your own states.** Settings → Add state: a name, a value, a colour per theme
   and a sentence explaining what it means. It shows up in the menu immediately.
 - **Front matter is the source of truth.** A state set by hand, by a template or

@@ -50,3 +50,44 @@
 	background: var(--background-modifier-hover);
 	border-radius: var(--radius-s);
 }
+
+/* The palette: fixed squares, hit the same way every time. A slider cannot be
+   hit twice — which is what made two almost-identical greens end up in the tree.
+   Sizing is in em so the grid follows the interface font size rather than
+   fighting it. */
+.color-note-palette {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.4em;
+	margin: 0 0 0.8em;
+}
+
+.color-note-chip {
+	width: 1.7em;
+	height: 1.7em;
+	padding: 0;
+	border-radius: var(--radius-s);
+	border: 1px solid var(--background-modifier-border);
+	box-shadow: none;
+	cursor: pointer;
+	transition: transform 80ms ease;
+}
+
+.color-note-chip:hover {
+	transform: scale(1.12);
+}
+
+/* The colour already in force, so the grid answers "which one is it?" without
+   a legend. Two rings — light over dark — so the mark stays visible on a chip
+   of any colour, including one matching the background. */
+.color-note-chip.is-current {
+	box-shadow:
+		0 0 0 2px var(--background-primary),
+		0 0 0 4px var(--text-normal);
+}
+
+.color-note-chip.is-invalid {
+	background: none;
+	border-style: dashed;
+	border-color: var(--text-error);
+}

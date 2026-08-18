@@ -2,6 +2,7 @@ import { Plugin, type TAbstractFile, TFile, TFolder } from 'obsidian';
 import { type ColorChoice, ColorModal } from './colorModal';
 import { type ColorNoteSettings, withDefaults } from './model';
 import { ExplorerPainter } from './painter';
+import { recentColors } from './palette';
 import { keysUnder, remapPaths } from './paths';
 import { resolveColors } from './resolve';
 import { ColorNoteSettingTab } from './settings';
@@ -136,10 +137,14 @@ export default class ColorNotePlugin extends Plugin {
 
 		new ColorModal(this.app, {
 			title: `${isFolder ? 'Color folder' : 'Color note'}: ${file.name}`,
-			// A folder has no front matter, so a state cannot be written into it.
-			states: isFolder ? [] : this.settings.states,
-			current: file instanceof TFile ? this.statusOf(file) : null,
+			// Folders get the states too. They have no front matter to write one
+			// into, so `apply` pins the state's colour to the path instead.
+			states: this.settings.states,
+			// A hand-picked colour wins in the tree, so it is what "current" means
+			// whenever there is one — otherwise the state the note carries.
+			current: pathColor?.color ?? (file instanceof TFile ? this.statusOf(file) : null),
 			initialCustom: pathColor?.color ?? '#4c9a63',
+			recent: recentColors(this.settings.pathColors),
 			onChoose: (choice) => void this.apply(file, choice),
 		}).open();
 	}
@@ -147,6 +152,17 @@ export default class ColorNotePlugin extends Plugin {
 	private async apply(file: TAbstractFile, choice: ColorChoice): Promise<void> {
 		switch (choice.kind) {
 			case 'state':
+				if (file instanceof TFolder) {
+					// No front matter to hold a state, so the folder keeps the
+					// state's colour rather than the state itself. It stops being
+					// a state at that moment: recolour the state later and the
+					// folder stays as it is — a note would follow.
+					this.settings.pathColors[file.path] = {
+						color: choice.state.color,
+						colorLight: choice.state.colorLight,
+					};
+					break;
+				}
 				// A hand-picked colour would otherwise keep overriding the state
 				// the user just chose, and the menu would look broken.
 				delete this.settings.pathColors[file.path];
@@ -156,7 +172,7 @@ export default class ColorNotePlugin extends Plugin {
 			case 'custom':
 				this.settings.pathColors[file.path] = {
 					color: choice.color,
-					colorLight: choice.color,
+					colorLight: choice.colorLight,
 				};
 				break;
 
