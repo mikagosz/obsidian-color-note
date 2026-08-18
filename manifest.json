@@ -1,7 +1,7 @@
 {
 	"id": "color-note",
 	"name": "Color Note",
-	"version": "0.2.0",
+	"version": "0.3.0",
 	"minAppVersion": "1.12.7",
 	"description": "Colour note titles in the file explorer by their state. Define your own states, each with a colour and a sentence saying what it means, and set them from the right-click menu.",
 	"author": "mikagosz",
