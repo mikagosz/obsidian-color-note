@@ -9,7 +9,9 @@
 
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_SETTINGS, DEFAULT_STATES, withDefaults } from '../src/model';
+import { recentColors } from '../src/palette';
 import { isAtOrUnder, keysUnder, remapPaths } from '../src/paths';
+import { resolveColors } from '../src/resolve';
 
 describe('isAtOrUnder', () => {
 	it('matches the path itself', () => {
@@ -105,5 +107,57 @@ describe('withDefaults', () => {
 		const second = withDefaults(null);
 		first.pathColors['A.md'] = { color: '#fff', colorLight: '#000' };
 		expect(second.pathColors).toEqual({});
+	});
+
+	// A hand-edited or sync-mangled data.json used to throw inside the paint on
+	// every keystroke. Each case below is one that did, measured in the audit.
+	describe('with a damaged data.json', () => {
+		const paint = (stored: unknown) => {
+			const settings = withDefaults(stored);
+			resolveColors({ statusByPath: new Map([['n.md', 'x']]), settings });
+			recentColors(settings.pathColors);
+			return settings;
+		};
+
+		it('falls back to defaults for fields of the wrong type', () => {
+			expect(paint({ pathColors: null }).pathColors).toEqual({});
+			expect(paint({ states: null }).states).toEqual(DEFAULT_STATES);
+			expect(paint({ statusField: 42 }).statusField).toBe('status');
+			expect(paint('not an object')).toEqual(DEFAULT_SETTINGS);
+		});
+
+		it('fills in a missing light colour on a state', () => {
+			const settings = paint({
+				states: [{ value: 'x', label: 'X', color: '#fff', description: '' }],
+			});
+			expect(settings.states).toEqual([
+				{ value: 'x', label: 'X', color: '#fff', colorLight: '', description: '' },
+			]);
+		});
+
+		it('fills in a missing light colour on a path colour', () => {
+			expect(paint({ pathColors: { 'a.md': { color: '#ff0000' } } }).pathColors).toEqual({
+				'a.md': { color: '#ff0000', colorLight: '' },
+			});
+		});
+
+		it('salvages a path colour stored as a bare string', () => {
+			expect(paint({ pathColors: { 'a.md': '#ff0000' } }).pathColors).toEqual({
+				'a.md': { color: '#ff0000', colorLight: '' },
+			});
+		});
+
+		it('drops entries that cannot be salvaged and keeps the rest', () => {
+			const settings = paint({
+				states: [{ label: 'no value', color: '#fff' }, DEFAULT_STATES[0], 7],
+				pathColors: { 'a.md': 7, 'b.md': { colorLight: '#000' }, 'c.md': { color: '#fff' } },
+			});
+			expect(settings.states).toEqual([DEFAULT_STATES[0]]);
+			expect(Object.keys(settings.pathColors)).toEqual(['c.md']);
+		});
+
+		it('keeps an empty list of states — deleting them all is a choice', () => {
+			expect(paint({ states: [] }).states).toEqual([]);
+		});
 	});
 });

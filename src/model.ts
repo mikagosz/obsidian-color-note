@@ -86,7 +86,63 @@ export const DEFAULT_SETTINGS: ColorNoteSettings = {
  * A plain spread would hand out the module's own `DEFAULT_STATES` array, which
  * the settings tab then edits in place — so deleting a state on a fresh install
  * would quietly rewrite the defaults for the rest of the session.
+ *
+ * Every field is also **checked for shape**. `data.json` can be edited by hand or
+ * come back from a sync conflict, and one entry without `colorLight` used to throw
+ * inside the paint on every keystroke, leaving the whole tree uncoloured. A field
+ * of the wrong type falls back to its default; an entry that cannot be salvaged is
+ * dropped; a missing optional text becomes empty.
  */
-export function withDefaults(stored: Partial<ColorNoteSettings> | null): ColorNoteSettings {
-	return { ...structuredClone(DEFAULT_SETTINGS), ...(stored ?? {}) };
+export function withDefaults(stored: unknown): ColorNoteSettings {
+	const defaults = structuredClone(DEFAULT_SETTINGS);
+	if (!isRecord(stored)) return defaults;
+
+	return {
+		states: Array.isArray(stored.states) ? stored.states.flatMap(toState) : defaults.states,
+		pathColors: isRecord(stored.pathColors) ? toPathColors(stored.pathColors) : defaults.pathColors,
+		statusField:
+			typeof stored.statusField === 'string' && stored.statusField.trim().length > 0
+				? stored.statusField
+				: defaults.statusField,
+	};
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function text(value: unknown): string {
+	return typeof value === 'string' ? value : '';
+}
+
+/** A state needs a value to write and a colour to paint; the rest can be blank. */
+function toState(raw: unknown): ColorState[] {
+	if (!isRecord(raw)) return [];
+	const value = text(raw.value).trim();
+	const color = text(raw.color);
+	if (!value || !color) return [];
+	return [
+		{
+			value,
+			label: text(raw.label) || value,
+			color,
+			colorLight: text(raw.colorLight),
+			description: text(raw.description),
+		},
+	];
+}
+
+/** A bare colour string is salvaged as a colour for both themes. */
+function toPathColors(raw: Record<string, unknown>): Record<string, PathColor> {
+	const out: Record<string, PathColor> = {};
+	for (const [path, entry] of Object.entries(raw)) {
+		if (typeof entry === 'string') {
+			if (entry) out[path] = { color: entry, colorLight: '' };
+			continue;
+		}
+		if (!isRecord(entry)) continue;
+		const color = text(entry.color);
+		if (color) out[path] = { color, colorLight: text(entry.colorLight) };
+	}
+	return out;
 }

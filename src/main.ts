@@ -68,7 +68,8 @@ export default class ColorNotePlugin extends Plugin {
 	}
 
 	async loadSettings(): Promise<void> {
-		const stored = (await this.loadData()) as Partial<ColorNoteSettings> | null;
+		// Whatever sits in data.json — `withDefaults` checks its shape, so no cast.
+		const stored: unknown = await this.loadData();
 		this.settings = withDefaults(stored);
 	}
 
