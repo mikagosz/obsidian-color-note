@@ -1,4 +1,4 @@
-import { type App, debounce, Modal, PluginSettingTab, Setting } from 'obsidian';
+import { type App, debounce, Modal, Notice, PluginSettingTab, Setting } from 'obsidian';
 import type ColorNotePlugin from './main';
 import type { ColorState } from './model';
 import { paintSwatch } from './swatch';
@@ -70,11 +70,18 @@ export class ColorNoteSettingTab extends PluginSettingTab {
 				button
 					.setIcon('trash')
 					.setTooltip('Delete')
-					.onClick(async () => {
-						this.plugin.settings.states.splice(index, 1);
-						await this.plugin.saveSettings();
-						this.display();
-					}),
+					.onClick(() =>
+						this.confirm(
+							'Delete state',
+							`Delete "${state.label}"? Notes that carry "${state.value}" keep it in their front matter, but lose their colour until a state with that value exists again.`,
+							'Delete',
+							async () => {
+								this.plugin.settings.states.splice(index, 1);
+								await this.plugin.saveSettings();
+								this.display();
+							},
+						),
+					),
 			);
 		});
 
@@ -91,12 +98,33 @@ export class ColorNoteSettingTab extends PluginSettingTab {
 					.setButtonText('Clear all')
 					.setWarning()
 					.setDisabled(coloured.length === 0)
-					.onClick(async () => {
-						this.plugin.settings.pathColors = {};
-						await this.plugin.saveSettings();
-						this.display();
-					}),
+					.onClick(() =>
+						this.confirm(
+							'Clear all custom colours',
+							`Remove the hand-picked colour from ${coloured.length} item(s)? States written into notes are not touched. This cannot be undone.`,
+							'Clear all',
+							async () => {
+								this.plugin.settings.pathColors = {};
+								await this.plugin.saveSettings();
+								this.display();
+							},
+						),
+					),
 			);
+	}
+
+	/**
+	 * Both destructive buttons here used to act on the first click. "Clear all"
+	 * throws away every colour picked by hand across the vault, which on a few
+	 * dozen folders is an hour of clicking to put back — so each asks first.
+	 */
+	private confirm(
+		title: string,
+		message: string,
+		action: string,
+		onConfirm: () => Promise<void>,
+	): void {
+		new ConfirmModal(this.app, title, message, action, onConfirm).open();
 	}
 
 	/** `null` adds a new state; an index edits the one already there. */
@@ -110,6 +138,46 @@ export class ColorNoteSettingTab extends PluginSettingTab {
 				this.display();
 			});
 		}).open();
+	}
+}
+
+/** A plain "are you sure", with Cancel first. */
+class ConfirmModal extends Modal {
+	constructor(
+		app: App,
+		title: string,
+		private readonly message: string,
+		private readonly action: string,
+		private readonly onConfirm: () => Promise<void>,
+	) {
+		super(app);
+		this.setTitle(title);
+	}
+
+	onOpen(): void {
+		const { contentEl } = this;
+		contentEl.createEl('p', { text: this.message });
+
+		// setWarning over setDestructive for the reason given in colorModal.ts:
+		// the replacement needs Obsidian 1.13 and minAppVersion is 1.12.7.
+		new Setting(contentEl)
+			.addButton((button) => button.setButtonText('Cancel').onClick(() => this.close()))
+			.addButton((button) =>
+				button
+					.setButtonText(this.action)
+					.setWarning()
+					.onClick(() => {
+						this.close();
+						this.onConfirm().catch((error: unknown) => {
+							console.error('[color-note] could not save the settings', error);
+							new Notice('Could not save the settings. Nothing was changed on disk.');
+						});
+					}),
+			);
+	}
+
+	onClose(): void {
+		this.contentEl.empty();
 	}
 }
 
