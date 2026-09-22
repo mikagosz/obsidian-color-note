@@ -1,5 +1,6 @@
-import { Plugin, type TAbstractFile, TFile, TFolder } from 'obsidian';
-import { type ColorChoice, ColorModal } from './colorModal';
+import { Notice, Plugin, type TAbstractFile, TFile, TFolder } from 'obsidian';
+import { applyPlan, type ColorChoice, planChoice } from './choice';
+import { ColorModal } from './colorModal';
 import { type ColorNoteSettings, withDefaults } from './model';
 import { ExplorerPainter } from './painter';
 import { recentColors } from './palette';
@@ -145,43 +146,27 @@ export default class ColorNotePlugin extends Plugin {
 			current: pathColor?.color ?? (file instanceof TFile ? this.statusOf(file) : null),
 			initialCustom: pathColor?.color ?? '#4c9a63',
 			recent: recentColors(this.settings.pathColors),
-			onChoose: (choice) => void this.apply(file, choice),
+			// The click is the only thing that started this, so a failure has to be
+			// said out loud — a dropped promise here looked like a menu that did
+			// nothing at all.
+			onChoose: (choice) => {
+				this.apply(file, choice).catch((error: unknown) => {
+					console.error('[color-note] could not apply the colour', error);
+					new Notice(
+						`Could not change ${file.name}: ${error instanceof Error ? error.message : String(error)}. If the note's front matter is malformed, fix it and try again.`,
+					);
+				});
+			},
 		}).open();
 	}
 
 	private async apply(file: TAbstractFile, choice: ColorChoice): Promise<void> {
-		switch (choice.kind) {
-			case 'state':
-				if (file instanceof TFolder) {
-					// No front matter to hold a state, so the folder keeps the
-					// state's colour rather than the state itself. It stops being
-					// a state at that moment: recolour the state later and the
-					// folder stays as it is — a note would follow.
-					this.settings.pathColors[file.path] = {
-						color: choice.state.color,
-						colorLight: choice.state.colorLight,
-					};
-					break;
-				}
-				// A hand-picked colour would otherwise keep overriding the state
-				// the user just chose, and the menu would look broken.
-				delete this.settings.pathColors[file.path];
-				await this.writeStatus(file, choice.state.value);
-				break;
-
-			case 'custom':
-				this.settings.pathColors[file.path] = {
-					color: choice.color,
-					colorLight: choice.colorLight,
-				};
-				break;
-
-			case 'clear':
-				delete this.settings.pathColors[file.path];
-				await this.writeStatus(file, null);
-				break;
-		}
-
+		// Folders get the states too. They have no front matter to write one into,
+		// so the plan pins the state's colour to the path instead.
+		const plan = planChoice(choice, !(file instanceof TFolder));
+		await applyPlan(plan, file.path, this.settings.pathColors, (value) =>
+			this.writeStatus(file, value),
+		);
 		await this.saveSettings();
 	}
 

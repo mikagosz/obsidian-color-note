@@ -1,12 +1,8 @@
 import { type App, type ColorComponent, Modal, Setting } from 'obsidian';
+import type { ColorChoice } from './choice';
 import type { ColorState } from './model';
 import { type Crayon, PALETTE } from './palette';
 import { paintSwatch } from './swatch';
-
-export type ColorChoice =
-	| { kind: 'state'; state: ColorState }
-	| { kind: 'custom'; color: string; colorLight: string }
-	| { kind: 'clear' };
 
 /** Chromium's own colour sampler. Not in the DOM typings yet, so declared here. */
 interface EyeDropperApi {
