@@ -107,6 +107,20 @@ export function withDefaults(stored: unknown): ColorNoteSettings {
 	};
 }
 
+/**
+ * What a state still lacks before it can be saved, in words for a notice.
+ *
+ * A state without a value would write an empty field into every note it touched;
+ * without a name it would be an unnamed row in the menu. Blank space counts as
+ * nothing — `" "` is not a name.
+ */
+export function missingStateFields(state: Pick<ColorState, 'label' | 'value'>): string[] {
+	const missing: string[] = [];
+	if (state.label.trim().length === 0) missing.push('a name');
+	if (state.value.trim().length === 0) missing.push('a value');
+	return missing;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

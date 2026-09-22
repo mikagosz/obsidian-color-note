@@ -1,6 +1,6 @@
 import { type App, debounce, Modal, Notice, PluginSettingTab, Setting } from 'obsidian';
 import type ColorNotePlugin from './main';
-import type { ColorState } from './model';
+import { type ColorState, missingStateFields } from './model';
 import { paintSwatch } from './swatch';
 
 /**
@@ -250,10 +250,13 @@ class StateEditModal extends Modal {
 				.setButtonText('Save')
 				.setCta()
 				.onClick(() => {
-					// A state without a value would write an empty field into
-					// every note it touched; without a label it would be an
-					// unnamed row in the menu.
-					if (!this.draft.value || !this.draft.label) return;
+					// Refused, but never silently: a Save that did nothing
+					// looked like a button that was broken.
+					const missing = missingStateFields(this.draft);
+					if (missing.length > 0) {
+						new Notice(`The state needs ${missing.join(' and ')} before it can be saved.`);
+						return;
+					}
 					this.onSave(this.draft);
 					this.close();
 				}),

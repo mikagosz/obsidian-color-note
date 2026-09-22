@@ -8,7 +8,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_SETTINGS, DEFAULT_STATES, withDefaults } from '../src/model';
+import { DEFAULT_SETTINGS, DEFAULT_STATES, missingStateFields, withDefaults } from '../src/model';
 import { recentColors } from '../src/palette';
 import { isAtOrUnder, keysUnder, remapPaths } from '../src/paths';
 import { resolveColors } from '../src/resolve';
@@ -159,5 +159,20 @@ describe('withDefaults', () => {
 		it('keeps an empty list of states — deleting them all is a choice', () => {
 			expect(paint({ states: [] }).states).toEqual([]);
 		});
+	});
+});
+
+// "Save" in the state editor used to do nothing at all when a field was empty.
+describe('missingStateFields', () => {
+	it('names both fields when both are empty', () => {
+		expect(missingStateFields({ label: '', value: '' })).toEqual(['a name', 'a value']);
+	});
+
+	it('counts blank space as nothing', () => {
+		expect(missingStateFields({ label: '   ', value: 'done' })).toEqual(['a name']);
+	});
+
+	it('is empty for a complete state', () => {
+		expect(missingStateFields({ label: 'Done', value: 'done' })).toEqual([]);
 	});
 });
