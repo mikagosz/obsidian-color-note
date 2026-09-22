@@ -7,7 +7,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { applyPlan, planChoice } from '../src/choice';
+import { applyPlan, holdsFrontMatter, planChoice } from '../src/choice';
 import type { ColorState, PathColor } from '../src/model';
 
 const DONE: ColorState = {
@@ -19,6 +19,26 @@ const DONE: ColorState = {
 };
 
 const TEAL: PathColor = { color: '#48998b', colorLight: '#2f7168' };
+
+describe('holdsFrontMatter', () => {
+	it('is true for a Markdown note', () => {
+		expect(holdsFrontMatter('md')).toBe(true);
+	});
+
+	it('is false for folders and attachments', () => {
+		expect(holdsFrontMatter(null)).toBe(false);
+		expect(holdsFrontMatter('pdf')).toBe(false);
+		expect(holdsFrontMatter('png')).toBe(false);
+		expect(holdsFrontMatter('canvas')).toBe(false);
+	});
+
+	// The bug: a state chosen on a PDF dropped its colour and wrote nothing.
+	it('makes a state on a PDF pin its colour instead of dropping it', () => {
+		const plan = planChoice({ kind: 'state', state: DONE }, holdsFrontMatter('pdf'));
+		expect(plan.pathColor).toEqual({ color: '#4c9a63', colorLight: '#1e6b34' });
+		expect(plan.status).toBeUndefined();
+	});
+});
 
 describe('planChoice', () => {
 	it('writes a state into a note and drops any hand-picked colour', () => {

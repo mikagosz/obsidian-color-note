@@ -20,8 +20,21 @@ export interface ChoicePlan {
 }
 
 /**
+ * Whether a state can be written into this item. Only Markdown notes carry
+ * front matter; folders (`null`), PDFs, images and canvases do not.
+ *
+ * Treating every file as a note sent a PDF down the note path: its colour was
+ * dropped to make room for a state that could never be written, so choosing a
+ * state removed the colour and put nothing in its place.
+ */
+export function holdsFrontMatter(extension: string | null): boolean {
+	return extension === 'md';
+}
+
+/**
  * @param holdsState whether the item has front matter a state can be written into.
- *   A folder has none, so it keeps the state's colour rather than the state itself.
+ *   A folder or an attachment has none, so it keeps the state's colour rather than
+ *   the state itself.
  */
 export function planChoice(choice: ColorChoice, holdsState: boolean): ChoicePlan {
 	switch (choice.kind) {

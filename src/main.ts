@@ -1,5 +1,5 @@
 import { Notice, Plugin, type TAbstractFile, TFile, TFolder } from 'obsidian';
-import { applyPlan, type ColorChoice, planChoice } from './choice';
+import { applyPlan, type ColorChoice, holdsFrontMatter, planChoice } from './choice';
 import { ColorModal } from './colorModal';
 import { type ColorNoteSettings, withDefaults } from './model';
 import { ExplorerPainter } from './painter';
@@ -161,9 +161,12 @@ export default class ColorNotePlugin extends Plugin {
 	}
 
 	private async apply(file: TAbstractFile, choice: ColorChoice): Promise<void> {
-		// Folders get the states too. They have no front matter to write one into,
-		// so the plan pins the state's colour to the path instead.
-		const plan = planChoice(choice, !(file instanceof TFolder));
+		// Folders and attachments get the states too. They have no front matter to
+		// write one into, so the plan pins the state's colour to the path instead.
+		const plan = planChoice(
+			choice,
+			holdsFrontMatter(file instanceof TFile ? file.extension : null),
+		);
 		await applyPlan(plan, file.path, this.settings.pathColors, (value) =>
 			this.writeStatus(file, value),
 		);
