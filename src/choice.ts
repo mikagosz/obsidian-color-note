@@ -32,11 +32,28 @@ export function holdsFrontMatter(extension: string | null): boolean {
 }
 
 /**
+ * Whether a front matter value is one of the plugin's own states.
+ *
+ * The field is shared: the vault's CSS snippet, Dataview and other tools read and
+ * write it too, with values the plugin has never heard of. Only a value the plugin
+ * knows is the plugin's to remove.
+ */
+export function isOwnState(value: unknown, states: readonly Pick<ColorState, 'value'>[]): boolean {
+	return typeof value === 'string' && states.some((state) => state.value === value);
+}
+
+/**
  * @param holdsState whether the item has front matter a state can be written into.
  *   A folder or an attachment has none, so it keeps the state's colour rather than
  *   the state itself.
+ * @param ownsStatus whether the note's current value in the field is one of the
+ *   plugin's states. "Remove colour" takes that value away, and nothing else.
  */
-export function planChoice(choice: ColorChoice, holdsState: boolean): ChoicePlan {
+export function planChoice(
+	choice: ColorChoice,
+	holdsState: boolean,
+	ownsStatus = false,
+): ChoicePlan {
 	switch (choice.kind) {
 		case 'state':
 			if (!holdsState) {
@@ -58,7 +75,9 @@ export function planChoice(choice: ColorChoice, holdsState: boolean): ChoicePlan
 			};
 
 		case 'clear':
-			return { status: holdsState ? null : undefined, pathColor: null };
+			// A value the plugin did not set is not its to delete: "Remove colour"
+			// on a note marked `status: zawieszony` took the status with it.
+			return { status: holdsState && ownsStatus ? null : undefined, pathColor: null };
 	}
 }
 
@@ -77,7 +96,15 @@ export async function applyPlan(
 	writeStatus: (value: string | null) => Promise<void>,
 ): Promise<void> {
 	if (plan.status !== undefined) await writeStatus(plan.status);
+	applyColor(plan.pathColor, path, pathColors);
+}
 
-	if (plan.pathColor === null) delete pathColors[path];
-	else if (plan.pathColor !== undefined) pathColors[path] = plan.pathColor;
+/** The map half of a plan: pin, drop, or leave the hand-picked colour. */
+export function applyColor(
+	pathColor: ChoicePlan['pathColor'],
+	path: string,
+	pathColors: Record<string, PathColor>,
+): void {
+	if (pathColor === null) delete pathColors[path];
+	else if (pathColor !== undefined) pathColors[path] = pathColor;
 }

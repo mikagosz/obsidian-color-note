@@ -95,6 +95,8 @@ export const DEFAULT_SETTINGS: ColorNoteSettings = {
  */
 export function withDefaults(stored: unknown): ColorNoteSettings {
 	const defaults = structuredClone(DEFAULT_SETTINGS);
+	// structuredClone does not keep a null prototype, so the map is made afresh.
+	defaults.pathColors = emptyPathColors();
 	if (!isRecord(stored)) return defaults;
 
 	return {
@@ -146,9 +148,57 @@ function toState(raw: unknown): ColorState[] {
 	];
 }
 
+/**
+ * The path → colour map, with no prototype.
+ *
+ * In an ordinary object `__proto__` is not a key but the object's prototype: a
+ * folder named `__proto__` at the root of the vault would not take a colour, and
+ * such an entry in data.json vanished on load. With no prototype every path is
+ * just a key.
+ */
+export function emptyPathColors(): Record<string, PathColor> {
+	return Object.create(null) as Record<string, PathColor>;
+}
+
+/**
+ * Whether data.json is there but could not be read.
+ *
+ * Obsidian hands back nothing both for a missing file and for one that does not
+ * parse (a stray comma after a hand edit, a sync cut short). Taking the second for
+ * the first loaded the defaults — and the first save wrote them over the real
+ * states and colours, past recovery. So the file's existence decides, not the
+ * shape of what `loadData` returned.
+ */
+export function dataUnreadable(stored: unknown, fileExists: boolean): boolean {
+	return fileExists && (stored === null || stored === undefined);
+}
+
+/**
+ * Changes the settings in memory, saves, and on a failed save puts the memory back.
+ *
+ * Without the undo, a failed write left the change in memory while the notice said
+ * nothing had changed — and the next successful save for any other reason quietly
+ * wrote it after all.
+ */
+export async function changeAndSave<T>(
+	take: () => T,
+	restore: (snapshot: T) => void,
+	change: () => void,
+	save: () => Promise<void>,
+): Promise<void> {
+	const snapshot = take();
+	change();
+	try {
+		await save();
+	} catch (error) {
+		restore(snapshot);
+		throw error;
+	}
+}
+
 /** A bare colour string is salvaged as a colour for both themes. */
 function toPathColors(raw: Record<string, unknown>): Record<string, PathColor> {
-	const out: Record<string, PathColor> = {};
+	const out = emptyPathColors();
 	for (const [path, entry] of Object.entries(raw)) {
 		if (typeof entry === 'string') {
 			if (entry) out[path] = { color: entry, colorLight: '' };

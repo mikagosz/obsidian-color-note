@@ -1,7 +1,7 @@
-import { Notice, Plugin, type TAbstractFile, TFile, TFolder } from 'obsidian';
-import { applyPlan, type ColorChoice, holdsFrontMatter, planChoice } from './choice';
+import { Notice, normalizePath, Plugin, type TAbstractFile, TFile, TFolder } from 'obsidian';
+import { applyColor, type ColorChoice, holdsFrontMatter, isOwnState, planChoice } from './choice';
 import { ColorModal } from './colorModal';
-import { type ColorNoteSettings, withDefaults } from './model';
+import { type ColorNoteSettings, changeAndSave, dataUnreadable, withDefaults } from './model';
 import { ExplorerPainter } from './painter';
 import { recentColors } from './palette';
 import { keysUnder, remapPaths } from './paths';
@@ -17,6 +17,10 @@ export default class ColorNotePlugin extends Plugin {
 	/** Path → state, kept up to date one note at a time. See `noteChanged`. */
 	private readonly statusByPath = new Map<string, string>();
 	private repaintTimer: number | null = null;
+	/** The field the index was last built from. See `saveSettings`. */
+	private sweptField: string | null = null;
+	/** data.json exists but does not parse — see `dataUnreadable`. Nothing is saved meanwhile. */
+	private unreadable = false;
 
 	async onload(): Promise<void> {
 		await this.loadSettings();
@@ -70,12 +74,34 @@ export default class ColorNotePlugin extends Plugin {
 	async loadSettings(): Promise<void> {
 		// Whatever sits in data.json — `withDefaults` checks its shape, so no cast.
 		const stored: unknown = await this.loadData();
+		const file = normalizePath(`${this.manifest.dir ?? ''}/data.json`);
+		this.unreadable = dataUnreadable(stored, await this.app.vault.adapter.exists(file));
+		if (this.unreadable) {
+			new Notice(
+				'Color Note could not read its settings file (data.json) — it may have been edited by hand. Showing the default states for now; nothing will be saved until the file is fixed, so what is in it is not lost.',
+				0,
+			);
+		}
 		this.settings = withDefaults(stored);
 	}
 
-	async saveSettings(): Promise<void> {
-		await this.saveData(this.settings);
+	/** data.json changed on disk — fixed by hand, or synced from another Mac. */
+	async onExternalSettingsChange(): Promise<void> {
+		await this.loadSettings();
 		this.repaint();
+	}
+
+	async saveSettings(): Promise<void> {
+		if (this.unreadable) {
+			throw new Error('data.json could not be read, so it is not overwritten — fix the file first');
+		}
+		await this.saveData(this.settings);
+		// The index depends on one setting only — the field a state is read from.
+		// A colour picked in the menu, a rename or a delete leaves it as it was, and
+		// `noteChanged` already keeps it current; walking the vault on each of those
+		// cost a full sweep for nothing.
+		if (this.settings.statusField !== this.sweptField) this.repaint();
+		else this.applyColors();
 	}
 
 	/**
@@ -84,6 +110,7 @@ export default class ColorNotePlugin extends Plugin {
 	 * every note has to be looked at again. Ordinary edits go through `noteChanged`.
 	 */
 	repaint(): void {
+		this.sweptField = this.settings.statusField;
 		this.statusByPath.clear();
 		for (const file of this.app.vault.getMarkdownFiles()) {
 			const value = this.statusOf(file);
@@ -153,8 +180,11 @@ export default class ColorNotePlugin extends Plugin {
 			onChoose: (choice) => {
 				this.apply(file, choice).catch((error: unknown) => {
 					console.error('[color-note] could not apply the colour', error);
+					const message = error instanceof Error ? error.message : String(error);
 					new Notice(
-						`Could not change ${file.name}: ${error instanceof Error ? error.message : String(error)}. If the note's front matter is malformed, fix it and try again.`,
+						error instanceof SettingsNotSaved
+							? `Could not save Color Note's settings: ${message}. The colour picked for ${file.name} was not kept.`
+							: `Could not change ${file.name}: ${message}. If the note's front matter is malformed, fix it and try again.`,
 					);
 				});
 			},
@@ -164,14 +194,29 @@ export default class ColorNotePlugin extends Plugin {
 	private async apply(file: TAbstractFile, choice: ColorChoice): Promise<void> {
 		// Folders and attachments get the states too. They have no front matter to
 		// write one into, so the plan pins the state's colour to the path instead.
+		const current = file instanceof TFile ? this.statusOf(file) : null;
 		const plan = planChoice(
 			choice,
 			holdsFrontMatter(file instanceof TFile ? file.extension : null),
+			isOwnState(current, this.settings.states),
 		);
-		await applyPlan(plan, file.path, this.settings.pathColors, (value) =>
-			this.writeStatus(file, value),
-		);
-		await this.saveSettings();
+		const colors = this.settings.pathColors;
+		// The note first — the step that fails on malformed YAML — then the map,
+		// which a failed save of data.json puts back as it was.
+		if (plan.status !== undefined) await this.writeStatus(file, plan.status);
+		try {
+			await changeAndSave(
+				() => colors[file.path],
+				(before) => {
+					if (before === undefined) delete colors[file.path];
+					else colors[file.path] = before;
+				},
+				() => applyColor(plan.pathColor, file.path, colors),
+				() => this.saveSettings(),
+			);
+		} catch (error) {
+			throw new SettingsNotSaved(error);
+		}
 	}
 
 	/** Writes (or removes) the state field, leaving the rest of the front matter alone. */
@@ -181,8 +226,12 @@ export default class ColorNotePlugin extends Plugin {
 		// processFrontMatter creates the block when there is none and rewrites
 		// only the one field — safer than touching the note's text ourselves.
 		await this.app.fileManager.processFrontMatter(file, (frontmatter: Record<string, unknown>) => {
-			if (value === null) delete frontmatter[this.settings.statusField];
-			else frontmatter[this.settings.statusField] = value;
+			const field = this.settings.statusField;
+			// Decided again on the note as it is on disk, not on the cache the plan
+			// was made from: a value that is not one of the plugin's states stays.
+			if (value === null) {
+				if (isOwnState(frontmatter[field], this.settings.states)) delete frontmatter[field];
+			} else frontmatter[field] = value;
 		});
 	}
 
@@ -214,10 +263,17 @@ export default class ColorNotePlugin extends Plugin {
 		}
 
 		if (moved) {
-			void this.saveSettings();
+			this.saveInBackground();
 			return;
 		}
 		this.scheduleRepaint();
+	}
+
+	/** A save nobody clicked for — a rename or a delete. A failure goes to the console. */
+	private saveInBackground(): void {
+		this.saveSettings().catch((error: unknown) => {
+			console.error('[color-note] could not save the settings', error);
+		});
 	}
 
 	/** Without this, deleted notes would leave their colours in `data.json` forever. */
@@ -233,9 +289,17 @@ export default class ColorNotePlugin extends Plugin {
 		}
 
 		if (dropped) {
-			void this.saveSettings();
+			this.saveInBackground();
 			return;
 		}
 		this.scheduleRepaint();
+	}
+}
+
+/** data.json could not be written; the note itself may have changed already. */
+class SettingsNotSaved extends Error {
+	constructor(readonly original: unknown) {
+		super(original instanceof Error ? original.message : String(original));
+		this.name = 'SettingsNotSaved';
 	}
 }

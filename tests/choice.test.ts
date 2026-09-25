@@ -7,7 +7,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { applyPlan, holdsFrontMatter, planChoice } from '../src/choice';
+import { applyColor, applyPlan, holdsFrontMatter, isOwnState, planChoice } from '../src/choice';
 import type { ColorState, PathColor } from '../src/model';
 
 const DONE: ColorState = {
@@ -62,8 +62,19 @@ describe('planChoice', () => {
 		});
 	});
 
-	it('clears both the colour and the state of a note', () => {
-		expect(planChoice({ kind: 'clear' }, true)).toEqual({ status: null, pathColor: null });
+	// Changed on purpose in 0.3.7 (audit SBW 2026-09-24, S-P1-01): the state goes
+	// only when it is one of the plugin's own.
+	it("clears both the colour and the state of a note when the state is the plugin's", () => {
+		expect(planChoice({ kind: 'clear' }, true, true)).toEqual({ status: null, pathColor: null });
+	});
+
+	it('leaves a status the plugin did not set, and clears only the colour', () => {
+		expect(planChoice({ kind: 'clear' }, true, false)).toEqual({
+			status: undefined,
+			pathColor: null,
+		});
+		// The default is the safe side: without knowing, nothing is deleted.
+		expect(planChoice({ kind: 'clear' }, true)).toEqual({ status: undefined, pathColor: null });
 	});
 
 	it('clears only the colour of an item without front matter', () => {
@@ -104,5 +115,41 @@ describe('applyPlan', () => {
 		});
 		expect(calls).toBe(0);
 		expect(colors).toEqual({ Folder: TEAL });
+	});
+});
+
+describe('isOwnState', () => {
+	it("knows the plugin's own values", () => {
+		expect(isOwnState('done', [DONE])).toBe(true);
+	});
+
+	it('does not claim a value some other tool wrote', () => {
+		expect(isOwnState('zawieszony', [DONE])).toBe(false);
+		expect(isOwnState('otwarte', [DONE])).toBe(false);
+	});
+
+	it('does not claim what is not text', () => {
+		expect(isOwnState(undefined, [DONE])).toBe(false);
+		expect(isOwnState(['done'], [DONE])).toBe(false);
+		expect(isOwnState(1, [DONE])).toBe(false);
+	});
+});
+
+describe('applyColor', () => {
+	it('pins, then drops, a colour under a path named __proto__', () => {
+		const proto = '__proto__';
+		const map = Object.create(null) as Record<string, PathColor>;
+		applyColor(TEAL, proto, map);
+		expect(Object.keys(map)).toEqual([proto]);
+		expect(map[proto]).toEqual(TEAL);
+		applyColor(null, proto, map);
+		expect(Object.keys(map)).toEqual([]);
+	});
+
+	it('leaves the map alone for undefined', () => {
+		const map = Object.create(null) as Record<string, PathColor>;
+		map.Folder = TEAL;
+		applyColor(undefined, 'Folder', map);
+		expect(map.Folder).toEqual(TEAL);
 	});
 });

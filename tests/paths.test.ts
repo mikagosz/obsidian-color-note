@@ -8,7 +8,14 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_SETTINGS, DEFAULT_STATES, missingStateFields, withDefaults } from '../src/model';
+import {
+	changeAndSave,
+	DEFAULT_SETTINGS,
+	DEFAULT_STATES,
+	dataUnreadable,
+	missingStateFields,
+	withDefaults,
+} from '../src/model';
 import { recentColors } from '../src/palette';
 import { isAtOrUnder, keysUnder, remapPaths } from '../src/paths';
 import { resolveColors } from '../src/resolve';
@@ -174,5 +181,79 @@ describe('missingStateFields', () => {
 
 	it('is empty for a complete state', () => {
 		expect(missingStateFields({ label: 'Done', value: 'done' })).toEqual([]);
+	});
+});
+
+// Audit SBW 2026-09-24, S-P3-01: in an ordinary object `__proto__` is the prototype.
+const PROTO = '__proto__';
+describe('withDefaults and a path named __proto__', () => {
+	it('keeps an entry for __proto__ read back from data.json', () => {
+		const stored = JSON.parse(
+			'{"pathColors": {"__proto__": {"color": "#aabbcc", "colorLight": ""}}}',
+		);
+		const settings = withDefaults(stored);
+		expect(Object.keys(settings.pathColors)).toEqual(['__proto__']);
+		expect(settings.pathColors[PROTO]).toEqual({ color: '#aabbcc', colorLight: '' });
+	});
+
+	it('gives a fresh install a map that takes __proto__ as a plain key', () => {
+		const settings = withDefaults(null);
+		settings.pathColors[PROTO] = { color: '#aabbcc', colorLight: '' };
+		expect(Object.keys(settings.pathColors)).toEqual([PROTO]);
+		// Control: an ordinary folder name works the same.
+		settings.pathColors.Folder = { color: '#112233', colorLight: '' };
+		expect(Object.keys(settings.pathColors)).toHaveLength(2);
+	});
+});
+
+// Audit SBW 2026-09-24, S-P2-02.
+describe('dataUnreadable', () => {
+	it('is true when the file is there but nothing came out of it', () => {
+		expect(dataUnreadable(undefined, true)).toBe(true);
+		expect(dataUnreadable(null, true)).toBe(true);
+	});
+
+	it('is false on a fresh install — no file at all', () => {
+		expect(dataUnreadable(null, false)).toBe(false);
+		expect(dataUnreadable(undefined, false)).toBe(false);
+	});
+
+	it('is false when the file was read', () => {
+		expect(dataUnreadable({ states: [] }, true)).toBe(false);
+	});
+});
+
+// Audit SBW 2026-09-24, S-P2-01.
+describe('changeAndSave', () => {
+	it('puts the memory back when saving fails', async () => {
+		const settings = withDefaults(null);
+		const before = settings.states.map((s) => s.value);
+		await expect(
+			changeAndSave(
+				() => [...settings.states],
+				(snapshot) => {
+					settings.states = snapshot;
+				},
+				() => settings.states.splice(0, 1),
+				async () => {
+					throw new Error('disk full');
+				},
+			),
+		).rejects.toThrow('disk full');
+		expect(settings.states.map((s) => s.value)).toEqual(before);
+	});
+
+	it('keeps the change when saving works', async () => {
+		const settings = withDefaults(null);
+		const count = settings.states.length;
+		await changeAndSave(
+			() => [...settings.states],
+			(snapshot) => {
+				settings.states = snapshot;
+			},
+			() => settings.states.splice(0, 1),
+			async () => {},
+		);
+		expect(settings.states).toHaveLength(count - 1);
 	});
 });

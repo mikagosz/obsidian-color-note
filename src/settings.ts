@@ -1,6 +1,6 @@
 import { type App, debounce, Modal, Notice, PluginSettingTab, Setting } from 'obsidian';
 import type ColorNotePlugin from './main';
-import { type ColorState, missingStateFields } from './model';
+import { type ColorState, changeAndSave, emptyPathColors, missingStateFields } from './model';
 import { paintSwatch } from './swatch';
 
 /**
@@ -25,7 +25,10 @@ export class ColorNoteSettingTab extends PluginSettingTab {
 		const saveField = debounce(
 			(value: string) => {
 				this.plugin.settings.statusField = value.trim() || 'status';
-				void this.plugin.saveSettings();
+				this.plugin.saveSettings().catch((error: unknown) => {
+					console.error('[color-note] could not save the settings', error);
+					new Notice('Could not save the settings.');
+				});
 			},
 			500,
 			true,
@@ -75,11 +78,7 @@ export class ColorNoteSettingTab extends PluginSettingTab {
 							'Delete state',
 							`Delete "${state.label}"? Notes that carry "${state.value}" keep it in their front matter, but lose their colour until a state with that value exists again.`,
 							'Delete',
-							async () => {
-								this.plugin.settings.states.splice(index, 1);
-								await this.plugin.saveSettings();
-								this.display();
-							},
+							() => this.changeStates((states) => states.splice(index, 1)),
 						),
 					),
 			);
@@ -104,9 +103,21 @@ export class ColorNoteSettingTab extends PluginSettingTab {
 							`Remove the hand-picked colour from ${coloured.length} item(s)? States written into notes are not touched. This cannot be undone.`,
 							'Clear all',
 							async () => {
-								this.plugin.settings.pathColors = {};
-								await this.plugin.saveSettings();
-								this.display();
+								const settings = this.plugin.settings;
+								try {
+									await changeAndSave(
+										() => settings.pathColors,
+										(before) => {
+											settings.pathColors = before;
+										},
+										() => {
+											settings.pathColors = emptyPathColors();
+										},
+										() => this.plugin.saveSettings(),
+									);
+								} finally {
+									this.display();
+								}
 							},
 						),
 					),
@@ -132,12 +143,36 @@ export class ColorNoteSettingTab extends PluginSettingTab {
 		const existing = index === null ? null : (this.plugin.settings.states[index] ?? null);
 
 		new StateEditModal(this.app, existing, (state) => {
-			if (index === null) this.plugin.settings.states.push(state);
-			else this.plugin.settings.states[index] = state;
-			void this.plugin.saveSettings().then(() => {
-				this.display();
+			this.changeStates((states) => {
+				if (index === null) states.push(state);
+				else states[index] = state;
+			}).catch((error: unknown) => {
+				console.error('[color-note] could not save the settings', error);
+				new Notice('Could not save the settings. Nothing was changed.');
 			});
 		}).open();
+	}
+
+	/**
+	 * Changes the list of states and saves it. A failed save puts the list back
+	 * and the rows are redrawn either way: rows left from before a failed delete
+	 * carried stale indexes, so the next bin click confirmed one state and removed
+	 * the one that had moved into its place.
+	 */
+	private async changeStates(change: (states: ColorState[]) => void): Promise<void> {
+		const settings = this.plugin.settings;
+		try {
+			await changeAndSave(
+				() => [...settings.states],
+				(before) => {
+					settings.states = before;
+				},
+				() => change(settings.states),
+				() => this.plugin.saveSettings(),
+			);
+		} finally {
+			this.display();
+		}
 	}
 }
 
@@ -170,7 +205,7 @@ class ConfirmModal extends Modal {
 						this.close();
 						this.onConfirm().catch((error: unknown) => {
 							console.error('[color-note] could not save the settings', error);
-							new Notice('Could not save the settings. Nothing was changed on disk.');
+							new Notice('Could not save the settings. Nothing was changed.');
 						});
 					}),
 			);
