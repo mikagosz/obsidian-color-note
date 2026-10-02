@@ -1,6 +1,6 @@
 # Color Note
 
-<a href="https://github.com/sponsors/mikagosz"><img src="https://img.shields.io/badge/Sponsor-GitHub%20Sponsors-EA4AAA?logo=githubsponsors&logoColor=white" width="350" alt="Sponsor on GitHub Sponsors"></a>
+<a href="https://github.com/sponsors/mikagosz"><img src="https://img.shields.io/badge/Sponsor-GitHub%20Sponsors-EA4AAA?logo=githubsponsors&logoColor=white" width="220" alt="Sponsor on GitHub Sponsors"></a>
 
 Colour note and folder titles in the Obsidian file explorer, from the right-click
 menu. The colours mean whatever you decide they mean — you define the states
