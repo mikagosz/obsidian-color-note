@@ -78,7 +78,7 @@ export default class ColorNotePlugin extends Plugin {
 		this.unreadable = dataUnreadable(stored, await this.app.vault.adapter.exists(file));
 		if (this.unreadable) {
 			new Notice(
-				'Color Note could not read its settings file (data.json) — it may have been edited by hand. Showing the default states for now; nothing will be saved until the file is fixed, so what is in it is not lost.',
+				'Color note could not read its settings file (data.json) — it may have been edited by hand. Showing the default states for now; nothing will be saved until the file is fixed, so what is in it is not lost.',
 				0,
 			);
 		}

@@ -1,5 +1,6 @@
 import { type App, type ColorComponent, Modal, Setting } from 'obsidian';
 import type { ColorChoice } from './choice';
+import { markDestructive } from './destructive';
 import type { ColorState } from './model';
 import { type Crayon, PALETTE } from './palette';
 import { paintSwatch } from './swatch';
@@ -84,17 +85,12 @@ export class ColorModal extends Modal {
 		this.palette(contentEl);
 		this.custom(contentEl);
 
-		// setWarning is deprecated in favour of setDestructive, which needs
-		// Obsidian 1.13. Swap it when minAppVersion moves up — until then this
-		// is the one that works for everybody.
+		// Red on every supported Obsidian — see destructive.ts.
 		new Setting(contentEl).addButton((button) =>
-			button
-				.setButtonText('Remove colour')
-				.setWarning()
-				.onClick(() => {
-					this.onChoose({ kind: 'clear' });
-					this.close();
-				}),
+			markDestructive(button.setButtonText('Remove colour')).onClick(() => {
+				this.onChoose({ kind: 'clear' });
+				this.close();
+			}),
 		);
 	}
 

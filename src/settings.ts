@@ -1,4 +1,5 @@
 import { type App, debounce, Modal, Notice, PluginSettingTab, Setting } from 'obsidian';
+import { markDestructive } from './destructive';
 import type ColorNotePlugin from './main';
 import { type ColorState, changeAndSave, emptyPathColors, missingStateFields } from './model';
 import { paintSwatch } from './swatch';
@@ -93,9 +94,7 @@ export class ColorNoteSettingTab extends PluginSettingTab {
 					: `${coloured.length} item(s) carry a colour picked by hand.`,
 			)
 			.addButton((button) =>
-				button
-					.setButtonText('Clear all')
-					.setWarning()
+				markDestructive(button.setButtonText('Clear all'))
 					.setDisabled(coloured.length === 0)
 					.onClick(() =>
 						this.confirm(
@@ -193,21 +192,17 @@ class ConfirmModal extends Modal {
 		const { contentEl } = this;
 		contentEl.createEl('p', { text: this.message });
 
-		// setWarning over setDestructive for the reason given in colorModal.ts:
-		// the replacement needs Obsidian 1.13 and minAppVersion is 1.12.7.
+		// Red on every supported Obsidian — see destructive.ts.
 		new Setting(contentEl)
 			.addButton((button) => button.setButtonText('Cancel').onClick(() => this.close()))
 			.addButton((button) =>
-				button
-					.setButtonText(this.action)
-					.setWarning()
-					.onClick(() => {
-						this.close();
-						this.onConfirm().catch((error: unknown) => {
-							console.error('[color-note] could not save the settings', error);
-							new Notice('Could not save the settings. Nothing was changed.');
-						});
-					}),
+				markDestructive(button.setButtonText(this.action)).onClick(() => {
+					this.close();
+					this.onConfirm().catch((error: unknown) => {
+						console.error('[color-note] could not save the settings', error);
+						new Notice('Could not save the settings. Nothing was changed.');
+					});
+				}),
 			);
 	}
 
