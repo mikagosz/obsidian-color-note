@@ -6,6 +6,16 @@ Colour note and folder titles in the Obsidian file explorer, from the right-clic
 menu. The colours mean whatever you decide they mean — you define the states
 yourself, in the settings, without touching CSS.
 
+| Light | Dark |
+|---|---|
+| ![Note and folder titles coloured by state in the file explorer, light theme](docs/tree-light.png) | ![The same explorer in the dark theme](docs/tree-dark.png) |
+
+Right-click a note or a folder, choose **Color note**, and pick a state — or any colour from the palette:
+
+| Light | Dark |
+|---|---|
+| ![The picker: four states with their descriptions, a palette, colours already used in the vault, and Remove colour](docs/picker-light.png) | ![The same picker in the dark theme](docs/picker-dark.png) |
+
 ## A colour that means something
 
 Most colouring plugins give you a palette. This one asks you what the colour is
