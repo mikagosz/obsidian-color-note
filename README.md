@@ -95,6 +95,12 @@ per note would not survive the explorer recycling its rows as you scroll.
 If a note carries both a state and a custom colour, the custom colour wins: it was
 picked by hand for that one note, while a state is a rule of thumb.
 
+Renames and deletions inside Obsidian carry custom colours along. A note deleted
+while Obsidian was closed leaves its colour behind; the command **Remove colours
+of notes and folders that no longer exist** clears those. It is not run on its own
+at start-up on purpose: in a synced vault a note that has not been downloaded yet
+looks exactly like a deleted one, and its colour would be lost.
+
 ## Settings
 
 | Setting | What it does |
