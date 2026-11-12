@@ -1,7 +1,13 @@
 import { type App, debounce, Modal, Notice, PluginSettingTab, Setting } from 'obsidian';
 import { markDestructive } from './destructive';
 import type ColorNotePlugin from './main';
-import { type ColorState, changeAndSave, emptyPathColors, missingStateFields } from './model';
+import {
+	type ColorState,
+	changeAndSave,
+	emptyPathColors,
+	fieldName,
+	missingStateFields,
+} from './model';
 import { paintSwatch } from './swatch';
 
 /**
@@ -25,7 +31,7 @@ export class ColorNoteSettingTab extends PluginSettingTab {
 		// keystroke, and wrote half-typed field names to disk on the way.
 		const saveField = debounce(
 			(value: string) => {
-				this.plugin.settings.statusField = value.trim() || 'status';
+				this.plugin.settings.statusField = fieldName(value);
 				this.plugin.saveSettings().catch((error: unknown) => {
 					console.error('[color-note] could not save the settings', error);
 					new Notice('Could not save the settings.');

@@ -1,7 +1,13 @@
 import { Notice, normalizePath, Plugin, type TAbstractFile, TFile, TFolder } from 'obsidian';
 import { applyColor, type ColorChoice, holdsFrontMatter, isOwnState, planChoice } from './choice';
 import { ColorModal } from './colorModal';
-import { type ColorNoteSettings, changeAndSave, dataUnreadable, withDefaults } from './model';
+import {
+	type ColorNoteSettings,
+	changeAndSave,
+	dataUnreadable,
+	withDefaults,
+	wrongShape,
+} from './model';
 import { ExplorerPainter } from './painter';
 import { recentColors } from './palette';
 import { keysUnder, remapPaths } from './paths';
@@ -26,6 +32,21 @@ export default class ColorNotePlugin extends Plugin {
 		await this.loadSettings();
 
 		this.addSettingTab(new ColorNoteSettingTab(this.app, this));
+
+		// A note deleted while Obsidian was closed leaves its colour behind, and a
+		// new note under the same name inherits it. Not pruned on start on purpose:
+		// in an iCloud vault a note that is not downloaded yet looks exactly like a
+		// deleted one, and its colour would be thrown away. Run on demand instead.
+		this.addCommand({
+			id: 'remove-colours-of-missing-paths',
+			name: 'Remove colours of notes and folders that no longer exist',
+			callback: () => {
+				this.removeMissing().catch((error: unknown) => {
+					const message = error instanceof Error ? error.message : String(error);
+					new Notice(`Could not save Color Note's settings: ${message}`);
+				});
+			},
+		});
 
 		this.registerEvent(
 			this.app.workspace.on('file-menu', (menu, file) => {
@@ -77,8 +98,13 @@ export default class ColorNotePlugin extends Plugin {
 		const file = normalizePath(`${this.manifest.dir ?? ''}/data.json`);
 		this.unreadable = dataUnreadable(stored, await this.app.vault.adapter.exists(file));
 		if (this.unreadable) {
+			const wrong = stored === null || stored === undefined ? [] : wrongShape(stored);
+			const what =
+				wrong.length > 0 && !wrong.includes('data.json')
+					? `its settings file (data.json) has ${wrong.join(', ')} in a shape it does not expect`
+					: 'could not read its settings file (data.json)';
 			new Notice(
-				'Color note could not read its settings file (data.json) — it may have been edited by hand. Showing the default states for now; nothing will be saved until the file is fixed, so what is in it is not lost.',
+				`Color note: ${what} — it may have been edited by hand. Showing the default states for now; nothing will be saved until the file is fixed, so what is in it is not lost.`,
 				0,
 			);
 		}
@@ -274,6 +300,34 @@ export default class ColorNotePlugin extends Plugin {
 		this.saveSettings().catch((error: unknown) => {
 			console.error('[color-note] could not save the settings', error);
 		});
+	}
+
+	/** The on-demand cleanup behind the command — see `onload`. */
+	private async removeMissing(): Promise<void> {
+		const colors = this.settings.pathColors;
+		const missing = Object.keys(colors).filter(
+			(path) => this.app.vault.getAbstractFileByPath(path) === null,
+		);
+		if (missing.length === 0) {
+			new Notice('Color Note: every coloured path still exists — nothing to remove.');
+			return;
+		}
+		await changeAndSave(
+			() => ({ ...colors }),
+			(before) => {
+				for (const path of missing) {
+					const entry = before[path];
+					if (entry) colors[path] = entry;
+				}
+			},
+			() => {
+				for (const path of missing) delete colors[path];
+			},
+			() => this.saveSettings(),
+		);
+		new Notice(
+			`Color Note: removed ${missing.length} colour${missing.length === 1 ? '' : 's'} of paths that no longer exist.`,
+		);
 	}
 
 	/** Without this, deleted notes would leave their colours in `data.json` forever. */

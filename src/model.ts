@@ -102,11 +102,22 @@ export function withDefaults(stored: unknown): ColorNoteSettings {
 	return {
 		states: Array.isArray(stored.states) ? stored.states.flatMap(toState) : defaults.states,
 		pathColors: isRecord(stored.pathColors) ? toPathColors(stored.pathColors) : defaults.pathColors,
-		statusField:
-			typeof stored.statusField === 'string' && stored.statusField.trim().length > 0
-				? stored.statusField
-				: defaults.statusField,
+		statusField: fieldName(stored.statusField),
 	};
+}
+
+/**
+ * Names a plain object cannot hold as a field of its own: assigning one changes
+ * the object's prototype, or nothing at all. With the state field set to
+ * `__proto__`, picking a state wrote nothing and said nothing.
+ */
+const RESERVED_FIELDS = new Set(['__proto__', 'constructor', 'prototype']);
+
+/** The front matter field a state goes into — the default for anything unusable. */
+export function fieldName(raw: unknown): string {
+	const trimmed = typeof raw === 'string' ? raw.trim() : '';
+	if (trimmed.length === 0 || RESERVED_FIELDS.has(trimmed)) return DEFAULT_SETTINGS.statusField;
+	return trimmed;
 }
 
 /**
@@ -170,7 +181,24 @@ export function emptyPathColors(): Record<string, PathColor> {
  * shape of what `loadData` returned.
  */
 export function dataUnreadable(stored: unknown, fileExists: boolean): boolean {
-	return fileExists && (stored === null || stored === undefined);
+	if (!fileExists) return false;
+	if (stored === null || stored === undefined) return true;
+	return wrongShape(stored).length > 0;
+}
+
+/**
+ * Fields that parse but are not what they should be — `pathColors` as a list,
+ * `states` as an object. Each of them used to fall back to its default in
+ * silence, and the first save wrote that default over the real colours or states.
+ * Returns the offending names (the whole file is `data.json`), for the notice.
+ */
+export function wrongShape(stored: unknown): string[] {
+	if (!isRecord(stored)) return ['data.json'];
+	const wrong: string[] = [];
+	if ('states' in stored && !Array.isArray(stored.states)) wrong.push('states');
+	if ('pathColors' in stored && !isRecord(stored.pathColors)) wrong.push('pathColors');
+	if ('statusField' in stored && typeof stored.statusField !== 'string') wrong.push('statusField');
+	return wrong;
 }
 
 /**

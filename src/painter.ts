@@ -54,7 +54,10 @@ export class ExplorerPainter {
 
 	setColors(colors: Map<string, ResolvedColor>): void {
 		this.colors = colors;
-		this.paint();
+		// Nothing is watched before the first `watch` and after `stop`. A save still
+		// in flight when the plugin was disabled used to paint after `stop` had
+		// cleaned up, leaving marked rows behind.
+		if (this.watched) this.paint();
 	}
 
 	/**
